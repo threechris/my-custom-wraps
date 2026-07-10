@@ -39,6 +39,7 @@
     display:flex; align-items:center; justify-content:center;
   }
   .btn:active { transform:scale(.92); }
+  .btn.off { opacity:.4; filter:grayscale(1); }
   #rightBtns { display:flex; gap:8px; }
 
   /* Splash screen */
@@ -105,6 +106,7 @@
   <div class="pill"><span>⭐</span><span id="score">0</span></div>
   <div id="rightBtns">
     <button class="btn" id="logBtn" title="My fish">🐟</button>
+    <button class="btn" id="musicBtn" title="Music">🪕</button>
     <button class="btn" id="muteBtn" title="Sound">🔊</button>
   </div>
 </div>
@@ -136,7 +138,7 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 
 let W = 0, H = 0, DPR = 1;
-let waterY = 0, deckY = 0, pierEnd = 0;
+let waterY = 0, deckY = 0, pierEnd = 0, kidX = 0;
 let rodBase = {x:0,y:0}, rodTip = {x:0,y:0};
 
 function resize() {
@@ -148,7 +150,9 @@ function resize() {
   waterY = H * 0.56;
   deckY  = waterY - Math.max(34, H * 0.05);
   pierEnd = Math.min(W * 0.34, 170);
-  rodBase = { x: pierEnd - 46, y: deckY - 46 };
+  kidX = pierEnd - 46;
+  // the grip point — where the kid's hands hold the rod, at chest height
+  rodBase = { x: kidX + 13, y: deckY - 33 };
 }
 resize();
 window.addEventListener('resize', resize);
@@ -181,14 +185,21 @@ const scoreEl = document.getElementById('score');
 scoreEl.textContent = save.score;
 
 /* ---------------- Audio (gentle & optional) ---------------------- */
-let AC = null, master = null, muted = false;
+/* Two independent buses: sfxBus (waves, plops, chimes — the 🔊 button)
+   and musicBus (the background tune — the 🪕 button). */
+let AC = null, sfxBus = null, musicBus = null;
+let muted = !!save.muted;
+let musicOn = save.music !== false;
 function initAudio() {
   if (AC) { if (AC.state === 'suspended') AC.resume(); return; }
   try {
     AC = new (window.AudioContext || window.webkitAudioContext)();
-    master = AC.createGain(); master.gain.value = muted ? 0 : 1;
-    master.connect(AC.destination);
+    sfxBus = AC.createGain(); sfxBus.gain.value = muted ? 0 : 1;
+    sfxBus.connect(AC.destination);
+    musicBus = AC.createGain(); musicBus.gain.value = musicOn ? 1 : 0;
+    musicBus.connect(AC.destination);
     startAmbience();
+    if (musicOn) startMusic();
   } catch(e) { AC = null; }
 }
 function startAmbience() {
@@ -203,7 +214,7 @@ function startAmbience() {
   const lfo = AC.createOscillator(); lfo.frequency.value = 0.09;
   const lfoG = AC.createGain(); lfoG.gain.value = 0.02;
   lfo.connect(lfoG); lfoG.connect(g.gain);
-  src.connect(lp); lp.connect(g); g.connect(master);
+  src.connect(lp); lp.connect(g); g.connect(sfxBus);
   src.start(); lfo.start();
 }
 function tone(freq, t0, dur, type, vol, slideTo) {
@@ -214,7 +225,7 @@ function tone(freq, t0, dur, type, vol, slideTo) {
   g.gain.setValueAtTime(0.0001, t0);
   g.gain.exponentialRampToValueAtTime(vol, t0 + 0.015);
   g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-  o.connect(g); g.connect(master);
+  o.connect(g); g.connect(sfxBus);
   o.start(t0); o.stop(t0 + dur + 0.05);
 }
 const sfx = {
@@ -229,10 +240,109 @@ const sfx = {
   aw()    { if(!AC) return; const t=AC.currentTime; tone(420,t,.22,'sine',.10,340); tone(340,t+.2,.3,'sine',.09,260); },
 };
 const muteBtn = document.getElementById('muteBtn');
+muteBtn.textContent = muted ? '🔇' : '🔊';
 muteBtn.addEventListener('click', () => {
   muted = !muted;
   muteBtn.textContent = muted ? '🔇' : '🔊';
-  if (master) master.gain.value = muted ? 0 : 1;
+  if (sfxBus) sfxBus.gain.value = muted ? 0 : 1;
+  save.muted = muted; persist();
+});
+
+/* ---------------- Background music (the 🪕 button) ----------------
+   An original, gentle country-folk shuffle — boom-chick bass, brushed
+   offbeats, and a plucked pentatonic melody. Evokes a campfire tune
+   without borrowing one. Key of G, ~96 BPM, 8-bar loop. */
+const MUSIC_BPM = 96;
+const mtof = m => 440 * Math.pow(2, (m - 69) / 12);
+// per bar: [bass root, bass fifth] as MIDI notes
+const MUSIC_BARS = [
+  [43, 50], [43, 50], [48, 43], [43, 50],   // G G C G
+  [43, 50], [43, 50], [50, 45], [43, 50],   // G G D G
+];
+// melody: [beat in 32-beat loop, MIDI note, length in beats]
+const MUSIC_MELODY = [
+  [0,67,.5],[0.5,69,.5],[1,71,1],[2,74,1],[3,71,.5],[3.5,69,.5],
+  [4,67,1.5],[5.5,64,.5],[6,62,2],
+  [8,76,.5],[8.5,74,.5],[9,72,1],[10,69,1],[11,67,1],
+  [12,67,.5],[12.5,71,.5],[13,69,1],[14,67,2],
+  [16,67,.5],[16.5,69,.5],[17,71,1],[18,74,1],[19,76,1],
+  [20,74,.5],[20.5,71,.5],[21,69,1],[22,71,.5],[22.5,69,.5],[23,67,1],
+  [24,69,.5],[24.5,67,.5],[25,66,1],[26,62,1],[27,64,.5],[27.5,66,.5],
+  [28,67,2],[30,62,.5],[30.5,64,.5],[31,67,1],
+];
+let musicTimer = null, musicBeat = 0, musicNextTime = 0;
+
+function pluckNote(midi, t, dur, vol) {
+  // plucked-string feel: triangle osc, darkening lowpass, fast decay
+  const o = AC.createOscillator(); o.type = 'triangle'; o.frequency.value = mtof(midi);
+  const f = AC.createBiquadFilter(); f.type = 'lowpass';
+  f.frequency.setValueAtTime(2400, t);
+  f.frequency.exponentialRampToValueAtTime(500, t + dur);
+  const g = AC.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(vol, t + 0.012);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(f); f.connect(g); g.connect(musicBus);
+  o.start(t); o.stop(t + dur + 0.05);
+}
+function bassNote(midi, t, dur, vol) {
+  const o = AC.createOscillator(); o.type = 'sine'; o.frequency.value = mtof(midi);
+  const g = AC.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(vol, t + 0.02);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g); g.connect(musicBus);
+  o.start(t); o.stop(t + dur + 0.05);
+}
+function brushTick(t, vol) {
+  // soft brushed snare on the offbeats
+  const len = Math.floor(AC.sampleRate * 0.05);
+  const buf = AC.createBuffer(1, len, AC.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+  const src = AC.createBufferSource(); src.buffer = buf;
+  const hp = AC.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 3000;
+  const g = AC.createGain(); g.gain.value = vol;
+  src.connect(hp); hp.connect(g); g.connect(musicBus);
+  src.start(t);
+}
+function scheduleMusic() {
+  if (!AC || !musicOn) return;
+  const spb = 60 / MUSIC_BPM;
+  while (musicNextTime < AC.currentTime + 0.65) {
+    const beat = musicBeat % 32;
+    const t = musicNextTime;
+    const bar = Math.floor(beat / 4), bi = beat % 4;
+    const chord = MUSIC_BARS[bar];
+    if (bi === 0) bassNote(chord[0], t, spb * 0.95, 0.11);   // boom
+    if (bi === 2) bassNote(chord[1], t, spb * 0.95, 0.10);
+    if (bi === 1 || bi === 3) brushTick(t, 0.035);           // chick
+    for (const [b, m, d] of MUSIC_MELODY) {
+      if (b >= beat && b < beat + 1) {
+        const swing = (b % 1) ? 0.09 * spb : 0;              // lazy offbeats
+        pluckNote(m, t + (b - beat) * spb + swing, d * spb * 0.95, 0.10);
+      }
+    }
+    musicBeat++; musicNextTime += spb;
+  }
+}
+function startMusic() {
+  if (musicTimer || !AC) return;
+  musicNextTime = Math.max(musicNextTime, AC.currentTime + 0.1);
+  scheduleMusic();
+  musicTimer = setInterval(scheduleMusic, 200);
+}
+function stopMusic() {
+  if (musicTimer) { clearInterval(musicTimer); musicTimer = null; }
+}
+const musicBtn = document.getElementById('musicBtn');
+musicBtn.classList.toggle('off', !musicOn);
+musicBtn.addEventListener('click', () => {
+  musicOn = !musicOn;
+  musicBtn.classList.toggle('off', !musicOn);
+  if (musicBus) musicBus.gain.value = musicOn ? 1 : 0;
+  if (musicOn) startMusic(); else stopMusic();
+  save.music = musicOn; persist();
 });
 
 function buzz(pattern) { if (navigator.vibrate) { try { navigator.vibrate(pattern); } catch(e){} } }
@@ -296,7 +406,7 @@ function setMsg(text, dur, big) { msg = { text, until: now + dur, big: !!big }; 
 
 function currentRodTip() {
   // rod pivots at rodBase; bends back while aiming, points out otherwise
-  const len = Math.max(90, Math.min(130, H * 0.16));
+  const len = Math.max(100, Math.min(140, H * 0.175));
   let ang = -0.9;                       // resting angle (up-right)
   if (state === S.AIM)  ang = -0.9 - power * 0.85;   // pull back
   if (state === S.BITE) ang = -0.62;                 // tug forward
@@ -631,10 +741,11 @@ function pierAndKid() {
   ctx.fillStyle = '#487e88'; ctx.fillRect(22, deckY - 27, 22, 4);
 
   // — the kid —
-  const kx = rodBase.x, ky = deckY;
+  const kx = kidX, ky = deckY;
   const bob2 = Math.sin(now * 1.6) * 1.5; // gentle idle sway
+  const sway = bob2 * 0.4;
   ctx.save();
-  ctx.translate(kx, ky + bob2 * 0.4);
+  ctx.translate(kx, ky + sway);
   // legs
   ctx.strokeStyle = '#3f6b8a'; ctx.lineWidth = 9; ctx.lineCap = 'round';
   ctx.beginPath(); ctx.moveTo(-5, -4); ctx.lineTo(-7, 0); ctx.moveTo(5, -4); ctx.lineTo(8, 0); ctx.stroke();
@@ -655,24 +766,37 @@ function pierAndKid() {
   ctx.beginPath(); ctx.arc(8, -52, 1.8, 0, Math.PI*2); ctx.fill();
   ctx.strokeStyle = '#333'; ctx.lineWidth = 1.6;
   ctx.beginPath(); ctx.arc(8, -48, 3.4, 0.15, Math.PI - 0.6); ctx.stroke();
-  // arms toward rod
-  ctx.strokeStyle = '#f4a259'; ctx.lineWidth = 7;
-  ctx.beginPath(); ctx.moveTo(6, -30); ctx.lineTo(16, -40); ctx.stroke();
   ctx.restore();
 
-  // rod
+  // rod — held at the grip point (rodBase), butt angled down across the body
   const tip = currentRodTip();
-  ctx.strokeStyle = '#6b4a2a'; ctx.lineWidth = 4; ctx.lineCap = 'round';
-  const bendBack = (state === S.AIM) ? power * 26 : (state === S.BITE ? -16 : (state === S.CATCH ? -10 : 0));
-  const mx = (rodBase.x + tip.x)/2 - bendBack * 0.6;
-  const my = (rodBase.y + tip.y)/2 + Math.abs(bendBack) * 0.3;
+  const grip = { x: rodBase.x, y: rodBase.y + sway };
+  const dirX = Math.cos(tip.ang), dirY = Math.sin(tip.ang);
+  const butt = { x: grip.x - dirX * 24, y: grip.y - dirY * 24 };
+  // arms reach from the shoulders to the rod (under the rod)
+  ctx.strokeStyle = '#f4a259'; ctx.lineWidth = 7; ctx.lineCap = 'round';
   ctx.beginPath();
-  ctx.moveTo(rodBase.x + 14, rodBase.y - 38);
+  ctx.moveTo(kx - 4, ky + sway - 28);
+  ctx.lineTo(grip.x - dirX * 11, grip.y - dirY * 11);
+  ctx.moveTo(kx + 7, ky + sway - 30);
+  ctx.lineTo(grip.x, grip.y);
+  ctx.stroke();
+  // rod
+  ctx.strokeStyle = '#6b4a2a'; ctx.lineWidth = 4;
+  const bendBack = (state === S.AIM) ? power * 26 : (state === S.BITE ? -16 : (state === S.CATCH ? -10 : 0));
+  const mx = (grip.x + tip.x)/2 - bendBack * 0.6;
+  const my = (grip.y + tip.y)/2 + Math.abs(bendBack) * 0.3;
+  ctx.beginPath();
+  ctx.moveTo(butt.x, butt.y);
   ctx.quadraticCurveTo(mx, my, tip.x, tip.y);
   ctx.stroke();
-  // reel
+  // reel hangs just below the grip
   ctx.fillStyle = '#3b4a5a';
-  ctx.beginPath(); ctx.arc(rodBase.x + 22, rodBase.y - 28, 6, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(grip.x - dirX * 8 + 3, grip.y - dirY * 8 + 8, 5.5, 0, Math.PI*2); ctx.fill();
+  // hands gripping over the rod
+  ctx.fillStyle = '#ffd9b3';
+  ctx.beginPath(); ctx.arc(grip.x, grip.y, 4.5, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(grip.x - dirX * 11, grip.y - dirY * 11, 4.5, 0, Math.PI*2); ctx.fill();
   return tip;
 }
 
@@ -844,7 +968,7 @@ function drawAimHelpers(tip) {
   }
   ctx.globalAlpha = 1;
   // power arc
-  const cx = rodBase.x + 14, cy = rodBase.y - 38;
+  const cx = rodBase.x, cy = rodBase.y;
   ctx.lineWidth = 8; ctx.lineCap = 'round';
   ctx.strokeStyle = 'rgba(255,255,255,0.4)';
   ctx.beginPath(); ctx.arc(cx, cy, 42, -Math.PI*0.9, -Math.PI*0.1); ctx.stroke();
