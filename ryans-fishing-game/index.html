@@ -149,7 +149,7 @@ function resize() {
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
   waterY = H * 0.56;
   deckY  = waterY - Math.max(34, H * 0.05);
-  pierEnd = Math.min(W * 0.34, 170);
+  pierEnd = Math.min(W * 0.24, 120);
   kidX = pierEnd - 46;
   // the grip point — where the kid's hands hold the rod, at chest height
   rodBase = { x: kidX + 13, y: deckY - 33 };
@@ -733,12 +733,12 @@ function pierAndKid() {
     ctx.beginPath(); ctx.moveTo(x, deckY + 2); ctx.lineTo(x, deckY + 14); ctx.stroke();
   }
 
-  // bucket with fish count
+  // bucket, tucked behind the kid near the shore end
   ctx.fillStyle = '#5f9ea8';
   ctx.beginPath();
-  ctx.moveTo(20, deckY); ctx.lineTo(46, deckY); ctx.lineTo(42, deckY - 26); ctx.lineTo(24, deckY - 26);
+  ctx.moveTo(10, deckY); ctx.lineTo(34, deckY); ctx.lineTo(30, deckY - 24); ctx.lineTo(14, deckY - 24);
   ctx.closePath(); ctx.fill();
-  ctx.fillStyle = '#487e88'; ctx.fillRect(22, deckY - 27, 22, 4);
+  ctx.fillStyle = '#487e88'; ctx.fillRect(12, deckY - 25, 20, 4);
 
   // — the kid —
   const kx = kidX, ky = deckY;
