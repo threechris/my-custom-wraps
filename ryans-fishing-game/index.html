@@ -406,7 +406,7 @@ function setMsg(text, dur, big) { msg = { text, until: now + dur, big: !!big }; 
 
 function currentRodTip() {
   // rod pivots at rodBase; bends back while aiming, points out otherwise
-  const len = Math.max(100, Math.min(140, H * 0.175));
+  const len = Math.max(50, Math.min(70, H * 0.0875));
   let ang = -0.9;                       // resting angle (up-right)
   if (state === S.AIM)  ang = -0.9 - power * 0.85;   // pull back
   if (state === S.BITE) ang = -0.62;                 // tug forward
