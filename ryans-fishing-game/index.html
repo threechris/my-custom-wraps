@@ -461,7 +461,7 @@ function startBite() {
 function pickFish() {
   const d = castDist01;
   let total = 0;
-  const w = FISH.map(f => { const v = Math.exp(-f.rar * (1.5 - 1.22 * d)); total += v; return v; });
+  const w = FISH.map(f => { const v = Math.exp(-f.rar * (1.1 - 0.95 * d)); total += v; return v; });
   let r = Math.random() * total;
   for (let i = 0; i < FISH.length; i++) { r -= w[i]; if (r <= 0) return FISH[i]; }
   return FISH[0];
