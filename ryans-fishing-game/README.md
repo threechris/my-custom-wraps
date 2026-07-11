@@ -26,8 +26,11 @@ with the thrill of the catch. Made for a 5-year-old to play on a phone.
 | Striped Bass | 60 |
 | Halibut | 80 |
 | Salmon | 100 |
+| Mahi-Mahi ✨ | 150 |
+| Yellowfin Tuna ✨ | 250 |
 
-Bigger fish live further out — cast far for a chance at the salmon!
+Bigger fish live further out — cast far for a chance at the salmon, or
+one of the two super-rare deep-water prizes!
 
 ## Running it
 
