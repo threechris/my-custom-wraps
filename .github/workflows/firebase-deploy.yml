@@ -1,8 +1,7 @@
 name: Deploy to Firebase Hosting
 
+# Run manually once a FIREBASE_SERVICE_ACCOUNT secret is configured (see HOSTING.md).
 on:
-  push:
-    branches: [master]
   workflow_dispatch:
 
 jobs:
