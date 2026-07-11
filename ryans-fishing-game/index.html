@@ -26,11 +26,14 @@
     padding:0 12px; pointer-events:none; z-index:5;
   }
   .pill {
+    pointer-events:auto; border:none; cursor:pointer;
+    font-family:inherit;
     background:rgba(255,255,255,.82); backdrop-filter:blur(4px);
     border-radius:999px; padding:8px 16px; font-weight:800; font-size:20px;
     color:#2b5876; box-shadow:0 2px 8px rgba(60,60,90,.18);
     display:flex; align-items:center; gap:7px;
   }
+  .pill:active { transform:scale(.95); }
   .btn {
     pointer-events:auto; border:none; cursor:pointer;
     background:rgba(255,255,255,.82); backdrop-filter:blur(4px);
@@ -83,6 +86,13 @@
     box-shadow:0 18px 50px rgba(0,0,40,.35);
   }
   #logCard h2 { color:#2b5876; text-align:center; font-size:24px; margin-bottom:12px; }
+  #logTotal {
+    display:flex; flex-direction:column; align-items:center; gap:2px;
+    background:#fff3d6; border-radius:16px; padding:10px 14px; margin-bottom:10px;
+    font-size:24px; font-weight:900; color:#c9862e;
+  }
+  #logTotal span { font-size:15px; font-weight:800; color:#3a5a70; }
+  .fishrow .cnt.zero { color:#b8c4c0; }
   .fishrow {
     display:flex; align-items:center; gap:12px; padding:8px 6px;
     border-bottom:1.5px dashed #e8dcc8; font-weight:700; color:#3a5a70;
@@ -103,7 +113,7 @@
 <canvas id="c"></canvas>
 
 <div id="topbar">
-  <div class="pill"><span>⭐</span><span id="score">0</span></div>
+  <button class="pill" id="scorePill"><span>⭐</span><span id="score">0</span></button>
   <div id="rightBtns">
     <button class="btn" id="logBtn" title="My fish">🐟</button>
     <button class="btn" id="musicBtn" title="Music">🪕</button>
@@ -366,14 +376,19 @@ function fishSVG(f, size) {
   </svg>`;
 }
 function renderLog() {
-  logRows.innerHTML = FISH.map(f => {
-    const n = save.counts[f.id] || 0;
-    return `<div class="fishrow">${fishSVG(f, 62)}
-      <div class="nm">${f.name}<br><span class="pts">+${f.pts} points</span></div>
-      <div class="cnt">${n ? '×' + n : '—'}</div></div>`;
-  }).join('');
+  const totalFish = FISH.reduce((n, f) => n + (save.counts[f.id] || 0), 0);
+  logRows.innerHTML =
+    `<div id="logTotal">⭐ ${save.score} points<span>🐟 ${totalFish} fish caught</span></div>` +
+    FISH.map(f => {
+      const n = save.counts[f.id] || 0;
+      return `<div class="fishrow">${fishSVG(f, 62)}
+        <div class="nm">${f.name}<br><span class="pts">+${f.pts} points</span></div>
+        <div class="cnt${n ? '' : ' zero'}">×${n}</div></div>`;
+    }).join('');
 }
-document.getElementById('logBtn').addEventListener('click', () => { renderLog(); logPanel.classList.add('open'); });
+const openLog = () => { renderLog(); logPanel.classList.add('open'); };
+document.getElementById('logBtn').addEventListener('click', openLog);
+document.getElementById('scorePill').addEventListener('click', openLog);
 document.getElementById('closeLog').addEventListener('click', () => logPanel.classList.remove('open'));
 logPanel.addEventListener('pointerdown', e => { if (e.target === logPanel) logPanel.classList.remove('open'); });
 
@@ -388,7 +403,7 @@ let bob = { x:0, y:0, vx:0, vy:0 };// bobber
 let castDist01 = 0;                // how far this cast went, 0..1
 let events = [];                   // scheduled nibble/bite events for this cast
 let biteStart = 0, biteWindow = 2.4;
-let hookedFish = null;
+let hookedFish = null, pendingFish = null;
 let catchT = 0, celebrateT = 0, celebrateUntil = 0;
 let catchFrom = null, catchTo = null;
 let msg = null;                    // {text, until, big}
@@ -444,6 +459,8 @@ function landBobber() {
   setMsg('Wait for it…', 2.5);
 }
 function scheduleBites() {
+  // decide the fish now so the approaching shadow can match its size
+  pendingFish = pickFish();
   events = [];
   let t = now + rand(1.4, 4.2);
   const nibbles = Math.random() < 0.6 ? 1 : (Math.random() < 0.5 ? 2 : 0);
@@ -476,7 +493,8 @@ function pickFish() {
   return FISH[0];
 }
 function doCatch() {
-  hookedFish = pickFish();
+  hookedFish = pendingFish || pickFish();
+  pendingFish = null;
   state = S.CATCH;
   catchT = now;
   catchFrom = { x: bob.x, y: waterY + 6 };
@@ -630,8 +648,10 @@ function update(dt) {
         splash(bob.x, waterY, 0.45); sfx.nibble(); buzz(25);
       } else if (ev.type === 'shadow') {
         const side = bob.x > W/2 ? 1 : -1;
+        // shadow size telegraphs the fish: sardine ~0.5, yellowfin tuna ~2.0
+        const sz = 0.5 + ((pendingFish ? pendingFish.len : 60) - 44) / 86 * 1.5;
         shadow = { x: bob.x + side*rand(130,220), y: waterY + rand(46, 90),
-                   tx: bob.x + rand(-8,8), ty: waterY + 34, size: rand(0.8, 1.4),
+                   tx: bob.x + rand(-8,8), ty: waterY + 34, size: sz,
                    fvx: side * rand(160, 260), flee:false };
       } else if (ev.type === 'bite') {
         startBite();
