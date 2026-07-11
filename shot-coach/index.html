@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="theme-color" content="#0d0d0d" />
+  <title>Shot Coach — basketball form analyzer</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8F%80%3C/text%3E%3C/svg%3E" />
+</head>
+<body>
+  <header id="topbar">
+    <div class="brand">🏀 Shot Coach</div>
+    <div class="topbar-actions">
+      <button id="flip-btn" class="icon-btn" title="Flip camera" aria-label="Flip camera">⟲</button>
+      <button id="settings-btn" class="icon-btn" title="Settings" aria-label="Settings">⚙</button>
+    </div>
+  </header>
+
+  <main>
+    <section id="stage-wrap">
+      <div id="stage">
+        <video id="cam" playsinline muted autoplay></video>
+        <canvas id="overlay"></canvas>
+      </div>
+      <div id="stage-ui" class="hidden">
+        <div id="phase-chip" data-phase="idle">Ready</div>
+        <div id="hud"></div>
+      </div>
+
+      <div id="intro">
+        <h1>Shot Coach</h1>
+        <p>Real-time feedback on your shooting form, straight from your phone's camera. Everything runs on-device — no video leaves your phone.</p>
+        <ol>
+          <li><strong>Prop your phone up side-on</strong>, about 10–15 ft away, so your whole body (head to feet) and the ball's first arc are in frame.</li>
+          <li><strong>Shoot like normal.</strong> Each shot is detected automatically.</li>
+          <li><strong>Hear and see feedback</strong> after every rep — release angle, arc trace, legs, elbow, follow-through, guide hand.</li>
+        </ol>
+        <button id="start-btn" class="primary-btn">Start session</button>
+        <p id="status-msg" class="hidden"></p>
+        <p class="fine-print">Works best in good light with a standard orange ball and an uncluttered background. Landscape orientation gives the ball more room to fly.</p>
+      </div>
+    </section>
+
+    <section id="feedback-area">
+      <nav id="tabs" role="tablist">
+        <button class="tab active" role="tab" aria-selected="true" data-tab="live">Live</button>
+        <button class="tab" role="tab" aria-selected="false" data-tab="shot">Last shot <span id="tab-badge-shot" class="badge hidden"></span></button>
+        <button class="tab" role="tab" aria-selected="false" data-tab="session">Session</button>
+        <button class="tab" role="tab" aria-selected="false" data-tab="pros">Pros</button>
+      </nav>
+
+      <div id="panel-live" class="panel">
+        <p class="muted-note">Feedback appears here after each shot. Keep your whole body in frame; the skeleton overlay confirms tracking. The <strong>blue arm</strong> is the one being analyzed — switch shooting hand in settings if it's wrong.</p>
+        <ul class="checklist">
+          <li>📐 Side view, full body visible</li>
+          <li>💡 Good, even light — avoid shooting into a bright window</li>
+          <li>🏀 Standard orange ball reads best</li>
+        </ul>
+      </div>
+      <div id="panel-shot" class="panel hidden">
+        <p class="muted-note">No shots yet.</p>
+      </div>
+      <div id="panel-session" class="panel hidden"></div>
+      <div id="panel-pros" class="panel hidden"></div>
+    </section>
+  </main>
+
+  <div id="settings" class="sheet hidden">
+    <div class="sheet-inner">
+      <div class="sheet-head">
+        <h2>Settings</h2>
+        <button id="settings-close" class="icon-btn" aria-label="Close">✕</button>
+      </div>
+      <label class="setting-row">
+        <span>Shooting hand</span>
+        <select id="set-hand">
+          <option value="right">Right</option>
+          <option value="left">Left</option>
+        </select>
+      </label>
+      <label class="setting-row">
+        <span>Voice feedback</span>
+        <input type="checkbox" id="set-voice" checked />
+      </label>
+      <label class="setting-row">
+        <span>Ball color detection</span>
+        <select id="set-ball">
+          <option value="0">Strict (bright light)</option>
+          <option value="1" selected>Normal</option>
+          <option value="2">Loose (dim light / worn ball)</option>
+        </select>
+      </label>
+      <label class="setting-row">
+        <span>Pose model</span>
+        <select id="set-model">
+          <option value="lite" selected>Fast (recommended)</option>
+          <option value="full">Accurate (slower)</option>
+        </select>
+      </label>
+      <p class="fine-print">All analysis runs locally in your browser. Nothing is uploaded.</p>
+    </div>
+  </div>
+
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
