@@ -28,6 +28,8 @@ with the thrill of the catch. Made for a 5-year-old to play on a phone.
 | Salmon | 100 |
 | Mahi-Mahi ✨ | 150 |
 | Yellowfin Tuna ✨ | 250 |
+| Swordfish 🗡️ (needs the Golden Offshore Rod) | 400 |
+| Blue Marlin 🗡️ (needs the Golden Offshore Rod) | 600 |
 
 Bigger fish live further out — cast far for a chance at the salmon, or
 one of the two super-rare deep-water prizes!
