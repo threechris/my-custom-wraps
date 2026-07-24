@@ -92,6 +92,12 @@
     font-size:24px; font-weight:900; color:#c9862e;
   }
   #logTotal span { font-size:15px; font-weight:800; color:#3a5a70; }
+  #logRod {
+    display:flex; flex-direction:column; align-items:center; gap:2px;
+    background:#e8f4ee; border-radius:16px; padding:8px 14px; margin-bottom:10px;
+    font-size:17px; font-weight:900; color:#2b7a5e;
+  }
+  #logRod span { font-size:13px; font-weight:800; color:#3a5a70; }
   .fishrow .cnt.zero { color:#b8c4c0; }
   .fishrow {
     display:flex; align-items:center; gap:12px; padding:8px 6px;
@@ -192,12 +198,41 @@ const FISH = [
     body:'#9fb4c4', back:'#2b4a66', belly:'#e8eef2', pattern:'tuna' },
 ];
 
+/* ---------------- Rods (leveling system) -------------------------
+   Modeled on real rods. `need` = total fish caught to unlock.
+   `lenS` scales the drawn rod, `cap` limits how far it can cast
+   (fraction of the full screen), so better rods reach bigger fish. */
+const RODS = [
+  { name:"Lil' Yellow Toy Rod",   real:'a Shakespeare toy-store rod',            need:0,
+    blank:'#f4c531', grip:'#e0574f', reel:'#e0574f', line:'rgba(255,255,255,0.85)',
+    lenS:0.85, width:5,   cap:0.60 },
+  { name:"Splash Blue Kids' Rod", real:'a Zebco kids combo',                     need:3,
+    blank:'#7ec8e3', grip:'#f2f4f5', reel:'#8a9bb0', line:'rgba(255,255,255,0.85)',
+    lenS:1.0,  width:4.5, cap:0.72 },
+  { name:'Black Ultralight',      real:'an ultralight spinning rod',             need:8,
+    blank:'#33383f', grip:'#c9a06a', reel:'#aab4c0', line:'rgba(255,255,255,0.85)',
+    lenS:1.15, width:3.5, cap:0.82 },
+  { name:'Blue Braid Caster',     real:'a saltwater rod with blue braided line', need:15,
+    blank:'#2f6bb0', grip:'#26313d', reel:'#4a90d9', line:'rgba(90,150,230,0.95)',
+    lenS:1.3,  width:4,   cap:0.90 },
+  { name:'Big Surf Rod',          real:'a 10-foot surf casting rod',             need:25,
+    blank:'#e8e4da', grip:'#26313d', reel:'#6b7686', line:'rgba(255,255,255,0.85)',
+    lenS:1.5,  width:4.5, cap:0.96 },
+  { name:'Golden Offshore Rod',   real:'an offshore trolling rod',               need:40,
+    blank:'#5a4a33', grip:'#26313d', reel:'#d4af37', line:'rgba(240,215,130,0.95)',
+    lenS:1.65, width:5.5, cap:1.0 },
+];
+function levelForCount(n) { let l = 0; RODS.forEach((r, i) => { if (n >= r.need) l = i; }); return l; }
+
 /* ---------------- Persistent score ------------------------------ */
 let save = { score:0, counts:{} };
 try { const s = JSON.parse(localStorage.getItem('ryansFishing')); if (s && typeof s.score==='number') save = s; } catch(e){}
 function persist(){ try { localStorage.setItem('ryansFishing', JSON.stringify(save)); } catch(e){} }
 const scoreEl = document.getElementById('score');
 scoreEl.textContent = save.score;
+function totalFishCaught() { return FISH.reduce((n, f) => n + (save.counts[f.id] || 0), 0); }
+if (save.rodLvl == null) save.rodLvl = levelForCount(totalFishCaught());
+let rodLvl = Math.min(save.rodLvl, RODS.length - 1);
 
 /* ---------------- Audio (gentle & optional) ---------------------- */
 /* Two independent buses: sfxBus (waves, plops, chimes — the 🔊 button)
@@ -377,8 +412,13 @@ function fishSVG(f, size) {
 }
 function renderLog() {
   const totalFish = FISH.reduce((n, f) => n + (save.counts[f.id] || 0), 0);
+  const nextRod = RODS[rodLvl + 1];
+  const rodLine = nextRod
+    ? `Next rod: catch ${Math.max(1, nextRod.need - totalFish)} more fish!`
+    : 'Best rod in the tackle box!';
   logRows.innerHTML =
     `<div id="logTotal">⭐ ${save.score} points<span>🐟 ${totalFish} fish caught</span></div>` +
+    `<div id="logRod">🎣 ${RODS[rodLvl].name}<span>${rodLine}</span></div>` +
     FISH.map(f => {
       const n = save.counts[f.id] || 0;
       return `<div class="fishrow">${fishSVG(f, 62)}
@@ -393,7 +433,7 @@ document.getElementById('closeLog').addEventListener('click', () => logPanel.cla
 logPanel.addEventListener('pointerdown', e => { if (e.target === logPanel) logPanel.classList.remove('open'); });
 
 /* ---------------- Game state ------------------------------------ */
-const S = { TITLE:0, IDLE:1, AIM:2, FLY:3, WAIT:4, BITE:5, CATCH:6, CELEBRATE:7 };
+const S = { TITLE:0, IDLE:1, AIM:2, FLY:3, WAIT:4, BITE:5, CATCH:6, CELEBRATE:7, LEVELUP:8 };
 let state = S.TITLE;
 let now = 0, last = 0;
 
@@ -405,6 +445,7 @@ let events = [];                   // scheduled nibble/bite events for this cast
 let biteStart = 0, biteWindow = 2.4;
 let hookedFish = null, pendingFish = null;
 let catchT = 0, celebrateT = 0, celebrateUntil = 0;
+let levelUpT = 0, pendingLevelUp = null;
 let catchFrom = null, catchTo = null;
 let msg = null;                    // {text, until, big}
 let pullStart = null, pulledThisTouch = false;
@@ -426,7 +467,7 @@ function setMsg(text, dur, big) { msg = { text, until: now + dur, big: !!big }; 
 
 function currentRodTip() {
   // rod pivots at rodBase; bends back while aiming, points out otherwise
-  const len = Math.max(50, Math.min(70, H * 0.0875));
+  const len = Math.max(50, Math.min(70, H * 0.0875)) * RODS[rodLvl].lenS;
   let ang = -0.9;                       // resting angle (up-right)
   if (state === S.AIM)  ang = -0.9 - power * 0.85;   // pull back
   if (state === S.BITE) ang = -0.62;                 // tug forward
@@ -439,13 +480,15 @@ const GRAV = 1400;
 function doCast() {
   const tip = currentRodTip();
   const minCast = 70;
-  const maxCast = W - tip.x - 26;
+  const maxCastAbs = W - tip.x - 26;                 // best rod's full reach
+  const maxCast = minCast + (maxCastAbs - minCast) * RODS[rodLvl].cap;
   const dist = lerp(minCast, maxCast, power);
   const T = 0.85 + 0.4 * power;
   bob.x = tip.x; bob.y = tip.y;
   bob.vx = dist / T;
   bob.vy = ((waterY - tip.y) - 0.5 * GRAV * T * T) / T;
-  castDist01 = clamp((dist - minCast) / Math.max(1, maxCast - minCast), 0, 1);
+  // fish odds scale against the ABSOLUTE max, so far fish need better rods
+  castDist01 = clamp((dist - minCast) / Math.max(1, maxCastAbs - minCast), 0, 1);
   state = S.FLY;
   sfx.cast();
   castsMade++;
@@ -512,6 +555,8 @@ function finishCatch() {
   celebrateUntil = now + 2.3;
   save.score += hookedFish.pts;
   save.counts[hookedFish.id] = (save.counts[hookedFish.id] || 0) + 1;
+  const newLvl = levelForCount(totalFishCaught());
+  if (newLvl > rodLvl) pendingLevelUp = newLvl;   // celebrate first, then upgrade
   persist();
   scoreEl.textContent = save.score;
   (hookedFish.rar >= 5 ? sfx.big : sfx.catch_)();
@@ -562,6 +607,9 @@ canvas.addEventListener('pointerdown', e => {
     pulledThisTouch = false;
   } else if (state === S.CELEBRATE && now > celebrateT + 0.7) {
     celebrateUntil = now; // skip ahead
+  } else if (state === S.LEVELUP && now > levelUpT + 0.7) {
+    state = S.IDLE;
+    setMsg('Cast your new rod!', 3);
   }
 });
 canvas.addEventListener('pointermove', e => {
@@ -666,8 +714,22 @@ function update(dt) {
   }
   else if (state === S.CELEBRATE) {
     if (now > celebrateUntil) {
-      state = S.IDLE; hookedFish = null;
-      setMsg(castsMade < 3 ? 'Pull back… and let go!' : 'Cast again!', 3);
+      hookedFish = null;
+      if (pendingLevelUp != null) {
+        rodLvl = pendingLevelUp; save.rodLvl = rodLvl; persist();
+        pendingLevelUp = null;
+        state = S.LEVELUP; levelUpT = now;
+        sfx.big(); buzz([40, 60, 40, 60, 120]);
+        const colors = ['#ffd166','#f4c531','#fff3c0','#ffe066'];
+        for (let i = 0; i < 40; i++) {
+          const a = rand(0, Math.PI*2), sp = rand(80, 360);
+          sparkles.push({ x:W/2, y:H*0.36, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp-140,
+                          life:rand(.9,1.7), color:colors[i%colors.length], r:rand(3,7) });
+        }
+      } else {
+        state = S.IDLE;
+        setMsg(castsMade < 3 ? 'Pull back… and let go!' : 'Cast again!', 3);
+      }
     }
   }
 }
@@ -810,18 +872,21 @@ function pierAndKid() {
   ctx.moveTo(kx + 7, ky + sway - 30);
   ctx.lineTo(grip.x, grip.y);
   ctx.stroke();
-  // rod
-  ctx.strokeStyle = '#6b4a2a'; ctx.lineWidth = 4;
+  // rod — colors and heft come from the current rod level
+  const rod = RODS[rodLvl];
   const bendBack = (state === S.AIM) ? power * 26 : (state === S.BITE ? -16 : (state === S.CATCH ? -10 : 0));
   const mx = (grip.x + tip.x)/2 - bendBack * 0.6;
   const my = (grip.y + tip.y)/2 + Math.abs(bendBack) * 0.3;
+  ctx.strokeStyle = rod.grip; ctx.lineWidth = rod.width + 2.5;
+  ctx.beginPath(); ctx.moveTo(butt.x, butt.y); ctx.lineTo(grip.x, grip.y); ctx.stroke();
+  ctx.strokeStyle = rod.blank; ctx.lineWidth = rod.width;
   ctx.beginPath();
-  ctx.moveTo(butt.x, butt.y);
+  ctx.moveTo(grip.x, grip.y);
   ctx.quadraticCurveTo(mx, my, tip.x, tip.y);
   ctx.stroke();
   // reel hangs just below the grip
-  ctx.fillStyle = '#3b4a5a';
-  ctx.beginPath(); ctx.arc(grip.x - dirX * 8 + 3, grip.y - dirY * 8 + 8, 5.5, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = rod.reel;
+  ctx.beginPath(); ctx.arc(grip.x - dirX * 8 + 3, grip.y - dirY * 8 + 8, 4 + rod.width * 0.5, 0, Math.PI*2); ctx.fill();
   // hands gripping over the rod
   ctx.fillStyle = '#ffd9b3';
   ctx.beginPath(); ctx.arc(grip.x, grip.y, 4.5, 0, Math.PI*2); ctx.fill();
@@ -830,7 +895,7 @@ function pierAndKid() {
 }
 
 function drawLine(tip) {
-  ctx.strokeStyle = 'rgba(255,255,255,0.85)'; ctx.lineWidth = 1.6;
+  ctx.strokeStyle = RODS[rodLvl].line; ctx.lineWidth = 1.6;
   let end = null;
   if (state === S.FLY || state === S.WAIT || state === S.BITE) {
     let by = bob.y;
@@ -994,7 +1059,8 @@ function drawFish(f, x, y, scale, rot) {
 function drawAimHelpers(tip) {
   if (state !== S.AIM || power <= 0.02) return;
   // trajectory preview dots
-  const minCast = 70, maxCast = W - tip.x - 26;
+  const minCast = 70, maxCastAbs = W - tip.x - 26;
+  const maxCast = minCast + (maxCastAbs - minCast) * RODS[rodLvl].cap;
   const dist = lerp(minCast, maxCast, power);
   const T = 0.85 + 0.4 * power;
   const vx = dist / T;
@@ -1075,13 +1141,69 @@ function drawCelebrate() {
   ctx.font = '900 32px ui-rounded, system-ui';
   ctx.fillText(`+${hookedFish.pts} ⭐`, 0, y + 212);
   ctx.restore();
-  // sparkles
+}
+
+function drawSparkles() {
   for (const sp of sparkles) {
     ctx.globalAlpha = clamp(sp.life, 0, 1);
     ctx.fillStyle = sp.color;
     ctx.beginPath(); ctx.arc(sp.x, sp.y, sp.r, 0, Math.PI*2); ctx.fill();
   }
   ctx.globalAlpha = 1;
+}
+
+/* A little portrait of a rod, used on the level-up card. */
+function drawRodIcon(rod, cx, cy, L) {
+  const ang = -0.5, dx = Math.cos(ang), dy = Math.sin(ang);
+  const bx = cx - dx*L/2, by = cy - dy*L/2;
+  const tx = cx + dx*L/2, ty = cy + dy*L/2;
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = rod.grip; ctx.lineWidth = rod.width + 6;
+  ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(bx + dx*L*0.2, by + dy*L*0.2); ctx.stroke();
+  ctx.strokeStyle = rod.blank; ctx.lineWidth = rod.width + 1;
+  ctx.beginPath(); ctx.moveTo(bx + dx*L*0.18, by + dy*L*0.18); ctx.lineTo(tx, ty); ctx.stroke();
+  ctx.fillStyle = rod.reel;
+  ctx.beginPath(); ctx.arc(bx + dx*L*0.28 + 4, by + dy*L*0.28 + 10, rod.width + 5, 0, Math.PI*2); ctx.fill();
+  // a little line dangling from the tip
+  ctx.strokeStyle = rod.line; ctx.lineWidth = 1.6;
+  ctx.beginPath(); ctx.moveTo(tx, ty); ctx.quadraticCurveTo(tx + 8, ty + 20, tx + 3, ty + 38); ctx.stroke();
+}
+
+function drawLevelUp() {
+  if (state !== S.LEVELUP) return;
+  const rod = RODS[rodLvl];
+  const t = clamp((now - levelUpT) / 0.4, 0, 1);
+  const s = ease(t);
+  ctx.fillStyle = 'rgba(20,60,80,0.35)';
+  ctx.fillRect(0, 0, W, H);
+  const cw = Math.min(W * 0.86, 370), ch = 264;
+  ctx.save();
+  ctx.translate(W/2, H * 0.38); ctx.scale(s, s);
+  ctx.fillStyle = 'rgba(255,250,240,0.97)';
+  ctx.strokeStyle = '#f4c531'; ctx.lineWidth = 6;
+  roundRect(-cw/2, -ch/2, cw, ch, 26); ctx.fill(); ctx.stroke();
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#e8a020';
+  ctx.font = '900 30px ui-rounded, system-ui';
+  ctx.fillText('✨ NEW ROD! ✨', 0, -ch/2 + 34);
+  const wob = Math.sin(now * 4) * 3;
+  drawRodIcon(rod, 0, -14 + wob, cw * 0.52);
+  ctx.fillStyle = '#2b5876';
+  const name = rod.name;
+  let px = 27;
+  do { ctx.font = `900 ${px}px ui-rounded, system-ui`; px--; }
+  while (px > 15 && ctx.measureText(name).width > cw - 36);
+  ctx.fillText(name, 0, 58);
+  ctx.fillStyle = '#7a8a96';
+  ctx.font = '700 15px ui-rounded, system-ui';
+  ctx.fillText(`Just like ${rod.real}!`, 0, 86);
+  const pulse = 1 + Math.sin(now * 5) * 0.04;
+  ctx.save(); ctx.scale(pulse, pulse);
+  ctx.fillStyle = '#e8564a';
+  ctx.font = '900 18px ui-rounded, system-ui';
+  ctx.fillText('Tap to go fishing!', 0, (ch/2 - 24) / pulse);
+  ctx.restore();
+  ctx.restore();
 }
 function roundRect(x, y, w, h, r) {
   ctx.beginPath();
@@ -1136,6 +1258,8 @@ function frame(ts) {
   drawAimHelpers(tip);
   drawIdleHint();
   drawCelebrate();
+  drawLevelUp();
+  drawSparkles();
   drawMsg();
 
   requestAnimationFrame(frame);

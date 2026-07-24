@@ -32,6 +32,21 @@ with the thrill of the catch. Made for a 5-year-old to play on a phone.
 Bigger fish live further out — cast far for a chance at the salmon, or
 one of the two super-rare deep-water prizes!
 
+## Rod upgrades
+
+Catching fish earns better rods, modeled on real tackle. Each rod is
+longer and casts further — the far water (and its big fish) needs the
+good rods.
+
+| Rod | Unlocked at | Reach |
+|---|---|---|
+| Lil' Yellow Toy Rod (Shakespeare toy-store rod) | start | 60% |
+| Splash Blue Kids' Rod (Zebco kids combo) | 3 fish | 72% |
+| Black Ultralight (ultralight spinning rod) | 8 fish | 82% |
+| Blue Braid Caster (saltwater rod, blue braided line) | 15 fish | 90% |
+| Big Surf Rod (10-foot surf caster) | 25 fish | 96% |
+| Golden Offshore Rod (offshore trolling rod) | 40 fish | 100% |
+
 ## Running it
 
 It's a single self-contained `index.html` — no build, no dependencies.
