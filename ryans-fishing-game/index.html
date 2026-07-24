@@ -221,6 +221,26 @@ const RODS = [
   { name:'Golden Offshore Rod',   real:'an offshore trolling rod',               need:40,
     blank:'#5a4a33', grip:'#26313d', reel:'#d4af37', line:'rgba(240,215,130,0.95)',
     lenS:1.65, width:5.5, cap:1.0 },
+  /* From here the rods get crazier. `luck` nudges the fish odds toward
+     the big ones, and `waitS` makes bites come sooner. */
+  { name:'Carbon Pro Tournament', real:'a tournament bass rod',                  need:60,
+    blank:'#3a4548', grip:'#111418', reel:'#66d43c', line:'rgba(150,255,90,0.95)',
+    lenS:1.75, width:4,   cap:1.0, luck:0.03, waitS:0.95 },
+  { name:'Big Game Marlin Rod',   real:'a 130-class marlin rod',                 need:85,
+    blank:'#1f3a5c', grip:'#111418', reel:'#c0c8d4', line:'rgba(220,230,255,0.9)',
+    lenS:1.85, width:6,   cap:1.0, luck:0.06, waitS:0.9 },
+  { name:'Midnight Glow Rod',     real:'a glow-tip night fishing rod',           need:115,
+    blank:'#19e3e0', grip:'#0c2a33', reel:'#0fa8b8', line:'rgba(130,250,255,0.95)',
+    lenS:1.95, width:4.5, cap:1.0, luck:0.10, waitS:0.85, glow:'#7ff9ff' },
+  { name:'Rainbow Legend Rod',    real:'a rod out of fishing legends',           need:150,
+    blank:'#e85d9e', grip:'#5a2a6e', reel:'#ffd166', line:'rgba(255,190,240,0.95)',
+    lenS:2.05, width:5,   cap:1.0, luck:0.15, waitS:0.8, rainbow:true },
+  { name:'Storm Lightning Rod',   real:'a rod forged in a thunderstorm',         need:200,
+    blank:'#ffe95c', grip:'#333a4a', reel:'#8fa3c8', line:'rgba(255,245,160,0.95)',
+    lenS:2.15, width:5.5, cap:1.0, luck:0.20, waitS:0.72, glow:'#fff7b0' },
+  { name:"Wizard's Star Rod",     real:"a wizard's enchanted rod",               need:260,
+    blank:'#8a5cf0', grip:'#2d1b4e', reel:'#ffd166', line:'rgba(200,160,255,0.95)',
+    lenS:2.25, width:5,   cap:1.0, luck:0.25, waitS:0.65, glow:'#c9a6ff' },
 ];
 function levelForCount(n) { let l = 0; RODS.forEach((r, i) => { if (n >= r.need) l = i; }); return l; }
 
@@ -505,10 +525,11 @@ function scheduleBites() {
   // decide the fish now so the approaching shadow can match its size
   pendingFish = pickFish();
   events = [];
-  let t = now + rand(1.4, 4.2);
+  const ws = RODS[rodLvl].waitS || 1;   // fancy rods tempt fish faster
+  let t = now + rand(1.4, 4.2) * ws;
   const nibbles = Math.random() < 0.6 ? 1 : (Math.random() < 0.5 ? 2 : 0);
-  for (let i = 0; i < nibbles; i++) { events.push({ t, type:'nibble' }); t += rand(0.8, 1.6); }
-  events.push({ t: t + rand(0.4, 1.0), type:'bite' });
+  for (let i = 0; i < nibbles; i++) { events.push({ t, type:'nibble' }); t += rand(0.8, 1.6) * ws; }
+  events.push({ t: t + rand(0.4, 1.0) * ws, type:'bite' });
   // fish shadow sneaks toward the bobber a moment before the bite
   const biteT = events[events.length-1].t;
   events.push({ t: biteT - 1.2, type:'shadow' });
@@ -528,7 +549,7 @@ function pickFish() {
     const f = FISH.find(f => f.id === window.__forceFish);
     if (f) return f;
   }
-  const d = castDist01;
+  const d = clamp(castDist01 + (RODS[rodLvl].luck || 0), 0, 1);
   let total = 0;
   const w = FISH.map(f => { const v = Math.exp(-f.rar * (1.1 - 0.95 * d)); total += v; return v; });
   let r = Math.random() * total;
@@ -879,11 +900,15 @@ function pierAndKid() {
   const my = (grip.y + tip.y)/2 + Math.abs(bendBack) * 0.3;
   ctx.strokeStyle = rod.grip; ctx.lineWidth = rod.width + 2.5;
   ctx.beginPath(); ctx.moveTo(butt.x, butt.y); ctx.lineTo(grip.x, grip.y); ctx.stroke();
-  ctx.strokeStyle = rod.blank; ctx.lineWidth = rod.width;
+  ctx.save();
+  ctx.strokeStyle = rodBlankStyle(rod, grip.x, grip.y, tip.x, tip.y);
+  if (rod.glow) { ctx.shadowColor = rod.glow; ctx.shadowBlur = 12; }
+  ctx.lineWidth = rod.width;
   ctx.beginPath();
   ctx.moveTo(grip.x, grip.y);
   ctx.quadraticCurveTo(mx, my, tip.x, tip.y);
   ctx.stroke();
+  ctx.restore();
   // reel hangs just below the grip
   ctx.fillStyle = rod.reel;
   ctx.beginPath(); ctx.arc(grip.x - dirX * 8 + 3, grip.y - dirY * 8 + 8, 4 + rod.width * 0.5, 0, Math.PI*2); ctx.fill();
@@ -1152,6 +1177,16 @@ function drawSparkles() {
   ctx.globalAlpha = 1;
 }
 
+/* Blank color for a rod — a slowly-shifting rainbow gradient for the
+   legend rod, a plain color for everything else. */
+function rodBlankStyle(rod, x1, y1, x2, y2) {
+  if (!rod.rainbow) return rod.blank;
+  const g = ctx.createLinearGradient(x1, y1, x2, y2);
+  const shift = (now * 30) % 360;
+  for (let i = 0; i <= 4; i++) g.addColorStop(i/4, `hsl(${(shift + i*72) % 360}, 85%, 60%)`);
+  return g;
+}
+
 /* A little portrait of a rod, used on the level-up card. */
 function drawRodIcon(rod, cx, cy, L) {
   const ang = -0.5, dx = Math.cos(ang), dy = Math.sin(ang);
@@ -1160,8 +1195,12 @@ function drawRodIcon(rod, cx, cy, L) {
   ctx.lineCap = 'round';
   ctx.strokeStyle = rod.grip; ctx.lineWidth = rod.width + 6;
   ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(bx + dx*L*0.2, by + dy*L*0.2); ctx.stroke();
-  ctx.strokeStyle = rod.blank; ctx.lineWidth = rod.width + 1;
+  ctx.save();
+  ctx.strokeStyle = rodBlankStyle(rod, bx, by, tx, ty);
+  if (rod.glow) { ctx.shadowColor = rod.glow; ctx.shadowBlur = 14; }
+  ctx.lineWidth = rod.width + 1;
   ctx.beginPath(); ctx.moveTo(bx + dx*L*0.18, by + dy*L*0.18); ctx.lineTo(tx, ty); ctx.stroke();
+  ctx.restore();
   ctx.fillStyle = rod.reel;
   ctx.beginPath(); ctx.arc(bx + dx*L*0.28 + 4, by + dy*L*0.28 + 10, rod.width + 5, 0, Math.PI*2); ctx.fill();
   // a little line dangling from the tip

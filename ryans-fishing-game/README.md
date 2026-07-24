@@ -47,6 +47,18 @@ good rods.
 | Big Surf Rod (10-foot surf caster) | 25 fish | 96% |
 | Golden Offshore Rod (offshore trolling rod) | 40 fish | 100% |
 
+Past the Golden Offshore Rod the upgrades get crazier — each one adds
+**luck** (better odds of big fish) and makes bites come sooner:
+
+| Rod | Unlocked at | Bonus |
+|---|---|---|
+| Carbon Pro Tournament (tournament bass rod) | 60 fish | a little luck |
+| Big Game Marlin Rod (130-class marlin rod) | 85 fish | more luck |
+| Midnight Glow Rod (glow-tip night rod, it glows!) | 115 fish | even more luck |
+| Rainbow Legend Rod (shimmering rainbow blank) | 150 fish | serious luck |
+| Storm Lightning Rod (forged in a thunderstorm) | 200 fish | storm luck |
+| Wizard's Star Rod (enchanted, glowing purple) | 260 fish | maximum luck |
+
 ## Running it
 
 It's a single self-contained `index.html` — no build, no dependencies.
